@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CrusaderJohnny/chirpy-go.git/internal/auth"
 	"github.com/CrusaderJohnny/chirpy-go.git/internal/database"
 	"github.com/google/uuid"
 )
@@ -30,7 +31,7 @@ type requestInfo struct {
 	UserID uuid.UUID `json:"user_id"`
 }
 
-func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	params := requestInfo{}
 	err := decoder.Decode(&params)
@@ -38,10 +39,20 @@ func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't decode request body", err)
 		return
 	}
+	bearerToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "could not parse token", err)
+		return
+	}
+	userIDFromJWT, err := auth.ValidateJWT(bearerToken, cfg.secretToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "could not validate token", err)
+		return
+	}
 	cleanedChirp, err := validateChirp(params.Body)
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   cleanedChirp,
-		UserID: params.UserID,
+		UserID: userIDFromJWT,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create chirp", err)
@@ -59,7 +70,7 @@ func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 func validateChirp(body string) (string, error) {
 	const maxChirpLength = 140
 	if len(body) > maxChirpLength {
-		return "", errors.New("Chirp is too long")
+		return "", errors.New("chirp is too long")
 	}
 	cleaned := cleanChirps(body)
 	return cleaned, nil
