@@ -17,6 +17,7 @@ type apiConfig struct {
 	db             *database.Queries
 	platform       string
 	secretToken    string
+	polkaKey       string
 }
 
 func main() {
@@ -38,6 +39,10 @@ func main() {
 	if secretToken == "" {
 		log.Fatal("SECRET_TOKEN environment variable not set")
 	}
+	polkaKey := os.Getenv("POLKA_KEY")
+	if polkaKey == "" {
+		log.Fatal("POLKA_KEY environment variable not set")
+	}
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Error opening database: %s", err)
@@ -49,6 +54,7 @@ func main() {
 		db:             dbQueries,
 		platform:       platform,
 		secretToken:    secretToken,
+		polkaKey:       polkaKey,
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))))
@@ -65,6 +71,7 @@ func main() {
 	mux.HandleFunc("POST /api/revoke", apiCfg.handleRevokeTokens)
 	mux.HandleFunc("PUT /api/users", apiCfg.handleUserUpdate)
 	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.handlerDeleteChirp)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.handlerWebHook)
 
 	srv := http.Server{
 		Addr:    ":" + port,
